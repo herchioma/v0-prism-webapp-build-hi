@@ -1,183 +1,130 @@
-"use client"
+'use client'
 
-import { useState, useCallback } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Progress } from "@/components/ui/progress"
-import { Upload, FileText, AlertCircle, CheckCircle } from "lucide-react"
-import { useDropzone } from "react-dropzone"
-import { cn } from "@/lib/utils"
-import type { AnalysisData } from "@/app/upload/page"
+import { useState, useCallback } from 'react'
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Progress } from '@/components/ui/progress'
+import { Upload, FileText, AlertCircle, CheckCircle } from 'lucide-react'
+import { useDropzone } from 'react-dropzone'
+import { cn } from '@/lib/utils'
 
-interface DatasetUploadProps {
-  onAnalysisComplete: (data: AnalysisData) => void
-  isAnalyzing: boolean
-  setIsAnalyzing: (analyzing: boolean) => void
+interface TweetItem {
+  id: number
+  text: string
 }
 
-export function DatasetUpload({ onAnalysisComplete, isAnalyzing, setIsAnalyzing }: DatasetUploadProps) {
+interface TweetsData {
+  filename?: string
+  extractedAt?: string
+  totalItems: number
+  items: TweetItem[]
+}
+
+interface DatasetUploadProps {
+  onExtractionComplete: (data: TweetsData) => void
+  isExtracting: boolean
+  setIsExtracting: (extracting: boolean) => void
+}
+
+export function DatasetUpload({
+  onExtractionComplete,
+  isExtracting,
+  setIsExtracting,
+}: DatasetUploadProps) {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null)
   const [progress, setProgress] = useState(0)
-  const [currentStep, setCurrentStep] = useState("")
+  const [currentStep, setCurrentStep] = useState('')
+  const [error, setError] = useState<string | null>(null)
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
     if (acceptedFiles.length > 0) {
       setUploadedFile(acceptedFiles[0])
+      setError(null)
     }
   }, [])
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: {
-      "text/csv": [".csv"],
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-      "application/json": [".json"],
-      "application/vnd.openxmlformats-officedocument.wordprocessingml.document": [".docx"],
-      "application/pdf": [".pdf"],
+      'application/pdf': ['.pdf'],
     },
     maxFiles: 1,
   })
 
-  const analyzeDataset = async () => {
+  const extractFromPDF = async () => {
     if (!uploadedFile) return
 
-    setIsAnalyzing(true)
+    setIsExtracting(true)
     setProgress(0)
-    setCurrentStep("Uploading file...")
+    setError(null)
+
+    const steps = [
+      'Uploading PDF file...',
+      'Parsing PDF content...',
+      'Extracting numbered text items...',
+      'Saving to tweets.json...',
+      'Finalizing extraction...',
+    ]
 
     try {
-      const isDocumentFile =
-        uploadedFile.name.toLowerCase().endsWith(".docx") || uploadedFile.name.toLowerCase().endsWith(".pdf")
-
-      const steps = isDocumentFile
-        ? [
-            "Uploading file...",
-            "Extracting tweets from document...",
-            "Cleaning and structuring tweets...",
-            "Running baseline sentiment analysis...",
-            "Running RAG-enhanced analysis...",
-            "Generating explanations...",
-            "Creating visualizations...",
-          ]
-        : [
-            "Uploading file...",
-            "Parsing dataset...",
-            "Detecting text columns...",
-            "Running baseline sentiment analysis...",
-            "Running RAG-enhanced analysis...",
-            "Generating explanations...",
-            "Creating visualizations...",
-          ]
-
-      for (let i = 0; i < steps.length; i++) {
+      // Simulate progress through steps
+      for (let i = 0; i < steps.length - 1; i++) {
         setCurrentStep(steps[i])
-        setProgress(((i + 1) / steps.length) * 100)
-        await new Promise((resolve) => setTimeout(resolve, 1000))
+        setProgress(((i + 1) / steps.length) * 80) // 80% for processing
+        await new Promise((resolve) => setTimeout(resolve, 500))
       }
 
-      const mockTweets = [
-        "I love this new product! It's absolutely amazing and exceeded all my expectations.",
-        "Terrible customer service experience. Very disappointed with the quality.",
-        "The product is okay, nothing special but does what it's supposed to do.",
-        "Excellent support team! They helped me resolve my issue quickly.",
-        "Poor quality for the price. I expected much better from this brand.",
-        "Amazing features and great user interface. Highly recommend!",
-        "Not worth the money. There are better alternatives available.",
-        "Good product overall, but could use some improvements in design.",
-        "Outstanding quality and fast delivery. Will definitely buy again!",
-        "Average product, meets basic requirements but lacks innovation.",
-      ]
+      // Create form data and upload
+      const formData = new FormData()
+      formData.append('file', uploadedFile)
 
-      const mockResults: AnalysisData = {
-        filename: uploadedFile.name,
-        rows: isDocumentFile ? mockTweets.length : 1000,
-        columns: isDocumentFile ? 1 : 5,
-        missingValues: isDocumentFile ? 0 : 23,
-        preview: isDocumentFile
-          ? mockTweets.slice(0, 5).map((tweet, index) => ({ id: index + 1, text: tweet }))
-          : [
-              { id: 1, text: "I love this product! Amazing quality.", rating: 5, category: "electronics" },
-              { id: 2, text: "Terrible service, very disappointed.", rating: 1, category: "service" },
-              { id: 3, text: "It's okay, nothing special.", rating: 3, category: "general" },
-              { id: 4, text: "Excellent customer support team!", rating: 5, category: "service" },
-              { id: 5, text: "Poor quality for the price.", rating: 2, category: "electronics" },
-            ],
-        textColumns: ["text"],
-        ...(isDocumentFile && {
-          tweetExtraction: {
-            totalTweets: mockTweets.length,
-            extractedTweets: mockTweets,
-            previewTweets: mockTweets.slice(0, 5),
-          },
-        }),
-        baselineSentiment: [
-          { text: "I love this product! Amazing quality.", sentiment: "POSITIVE", confidence: 0.95 },
-          { text: "Terrible service, very disappointed.", sentiment: "NEGATIVE", confidence: 0.89 },
-          { text: "It's okay, nothing special.", sentiment: "NEUTRAL", confidence: 0.67 },
-        ],
-        ragSentiment: [
-          { text: "I love this product! Amazing quality.", sentiment: "POSITIVE", confidence: 0.98 },
-          { text: "Terrible service, very disappointed.", sentiment: "NEGATIVE", confidence: 0.94 },
-          { text: "It's okay, nothing special.", sentiment: "NEUTRAL", confidence: 0.78 },
-        ],
-        explanations: [
-          {
-            text: "I love this product! Amazing quality.",
-            explanation: "Keywords 'love', 'amazing', 'quality' indicate strong positive sentiment",
-          },
-          {
-            text: "Terrible service, very disappointed.",
-            explanation: "Keywords 'terrible', 'disappointed' indicate strong negative sentiment",
-          },
-          { text: "It's okay, nothing special.", explanation: "Neutral language with no strong emotional indicators" },
-        ],
-        sentimentDistribution: {
-          baseline: { positive: 45, negative: 30, neutral: 25 },
-          rag: { positive: 48, negative: 28, neutral: 24 },
-        },
-        wordClouds: {
-          positive: [
-            { text: "love", value: 45 },
-            { text: "amazing", value: 38 },
-            { text: "excellent", value: 32 },
-            { text: "great", value: 28 },
-            { text: "wonderful", value: 25 },
-          ],
-          negative: [
-            { text: "terrible", value: 42 },
-            { text: "disappointed", value: 35 },
-            { text: "poor", value: 30 },
-            { text: "bad", value: 28 },
-            { text: "awful", value: 22 },
-          ],
-          neutral: [
-            { text: "okay", value: 25 },
-            { text: "average", value: 20 },
-            { text: "normal", value: 18 },
-            { text: "standard", value: 15 },
-            { text: "typical", value: 12 },
-          ],
-        },
+      const response = await fetch('/api/extract-pdf', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Failed to extract text from PDF')
       }
 
-      setCurrentStep("Analysis complete!")
-      onAnalysisComplete(mockResults)
+      // Final step
+      setCurrentStep(steps[steps.length - 1])
+      setProgress(100)
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      // Success
+      onExtractionComplete(result)
     } catch (error) {
-      console.error("Analysis failed:", error)
+      console.error('PDF extraction error:', error)
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'Failed to extract text from PDF',
+      )
     } finally {
-      setIsAnalyzing(false)
+      setIsExtracting(false)
     }
   }
 
-  if (isAnalyzing) {
+  if (isExtracting) {
     return (
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5 animate-pulse text-primary" />
-            Analyzing Dataset
+            Extracting Text from PDF
           </CardTitle>
-          <CardDescription>Processing your data with advanced sentiment analysis</CardDescription>
+          <CardDescription>
+            Processing your PDF and extracting numbered text items
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -198,26 +145,32 @@ export function DatasetUpload({ onAnalysisComplete, isAnalyzing, setIsAnalyzing 
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5" />
-            Upload
+            Upload PDF
           </CardTitle>
-          <CardDescription>Supported formats: CSV, Excel (.xlsx), JSON, Word (.docx), PDF (.pdf)</CardDescription>
+          <CardDescription>
+            Upload a PDF containing numbered text items (1. 2. 3. etc.)
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <div
             {...getRootProps()}
             className={cn(
-              "border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors",
-              isDragActive ? "border-primary bg-primary/5" : "border-muted-foreground/25 hover:border-primary/50",
+              'border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors',
+              isDragActive
+                ? 'border-primary bg-primary/5'
+                : 'border-muted-foreground/25 hover:border-primary/50',
             )}
           >
             <input {...getInputProps()} />
             <Upload className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
             {isDragActive ? (
-              <p className="text-primary">Drop your file here...</p>
+              <p className="text-primary">Drop your PDF here...</p>
             ) : (
               <div className="space-y-2">
-                <p className="text-foreground">Drag & drop your dataset here</p>
-                <p className="text-sm text-muted-foreground">or click to browse files</p>
+                <p className="text-foreground">Drag & drop your PDF here</p>
+                <p className="text-sm text-muted-foreground">
+                  or click to browse files
+                </p>
               </div>
             )}
           </div>
@@ -229,12 +182,28 @@ export function DatasetUpload({ onAnalysisComplete, isAnalyzing, setIsAnalyzing 
                 <span className="font-medium">{uploadedFile.name}</span>
                 <CheckCircle className="h-4 w-4 text-green-500 ml-auto" />
               </div>
-              <p className="text-sm text-muted-foreground mt-1">{(uploadedFile.size / 1024 / 1024).toFixed(2)} MB</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {(uploadedFile.size / 1024 / 1024).toFixed(2)} MB
+              </p>
             </div>
           )}
 
-          <Button onClick={analyzeDataset} disabled={!uploadedFile} className="w-full mt-4">
-            Start Analysis
+          {error && (
+            <div className="mt-4 p-4 bg-destructive/10 border border-destructive/20 rounded-lg">
+              <div className="flex items-center gap-2 text-destructive">
+                <AlertCircle className="h-4 w-4" />
+                <span className="font-medium">Error</span>
+              </div>
+              <p className="text-sm text-destructive/80 mt-1">{error}</p>
+            </div>
+          )}
+
+          <Button
+            onClick={extractFromPDF}
+            disabled={!uploadedFile}
+            className="w-full mt-4"
+          >
+            Extract Text Items
           </Button>
         </CardContent>
       </Card>
@@ -243,7 +212,7 @@ export function DatasetUpload({ onAnalysisComplete, isAnalyzing, setIsAnalyzing 
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertCircle className="h-5 w-5" />
-            Analysis Features
+            How It Works
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -251,36 +220,46 @@ export function DatasetUpload({ onAnalysisComplete, isAnalyzing, setIsAnalyzing 
             <div className="flex items-start gap-3">
               <div className="h-2 w-2 rounded-full bg-primary mt-2" />
               <div>
-                <p className="font-medium">Dataset Preview</p>
-                <p className="text-sm text-muted-foreground">View rows, columns, missing values, and sample data</p>
+                <p className="font-medium">PDF Text Extraction</p>
+                <p className="text-sm text-muted-foreground">
+                  Automatically extracts text from your PDF document
+                </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <div className="h-2 w-2 rounded-full bg-primary mt-2" />
               <div>
-                <p className="font-medium">Dual Sentiment Analysis</p>
-                <p className="text-sm text-muted-foreground">Compare baseline vs RAG-enhanced predictions</p>
+                <p className="font-medium">Numbered Item Detection</p>
+                <p className="text-sm text-muted-foreground">
+                  Finds and organizes text items numbered 1. 2. 3. etc.
+                </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <div className="h-2 w-2 rounded-full bg-primary mt-2" />
               <div>
-                <p className="font-medium">Explainable AI</p>
-                <p className="text-sm text-muted-foreground">Understand why each prediction was made</p>
+                <p className="font-medium">Editable Text List</p>
+                <p className="text-sm text-muted-foreground">
+                  Edit, delete, or manage individual text items
+                </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <div className="h-2 w-2 rounded-full bg-primary mt-2" />
               <div>
-                <p className="font-medium">Visual Analytics</p>
-                <p className="text-sm text-muted-foreground">Charts, word clouds, and distribution analysis</p>
+                <p className="font-medium">JSON Export</p>
+                <p className="text-sm text-muted-foreground">
+                  Automatically saves to data/tweets.json file
+                </p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <div className="h-2 w-2 rounded-full bg-primary mt-2" />
               <div>
-                <p className="font-medium">Export Results</p>
-                <p className="text-sm text-muted-foreground">Download enhanced CSV and PDF reports</p>
+                <p className="font-medium">File Replacement</p>
+                <p className="text-sm text-muted-foreground">
+                  New uploads replace existing content automatically
+                </p>
               </div>
             </div>
           </div>
